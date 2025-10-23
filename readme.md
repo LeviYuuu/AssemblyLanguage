@@ -17,52 +17,72 @@ int main() {
 
 相应的反汇编代码：
 ```
+	.text
+	.globl	main
+	.def	main;	.scl	2;	.type	32;	.endef
+	.seh_proc	main
 main:
-        push    rbp                    ; 保存旧的基址指针
-        mov     rbp, rsp               ; 设置新的基址指针
-        sub     rsp, 16                ; 在栈上分配16字节空间
-        mov     DWORD PTR [rbp-4], 0   ; 初始化局部变量[i]为0（循环计数器）
-        jmp     .L2                    ; 跳转到循环条件检查
-
-.L4:                                   ; 循环体开始
-        ; 输出字符：'a' + i
-        mov     eax, DWORD PTR [rbp-4] ; eax = i
-        add     eax, 97                ; eax = i + 97 (97是'a'的ASCII码)
-        mov     edi, eax               ; 准备参数：要输出的字符
-        call    putchar                ; 调用putchar输出字符
-
-        mov     eax, DWORD PTR [rbp-4] ; eax = i
-        lea     ecx, [rax+1]           ; ecx = i + 1
-        movsx   rax, ecx               ; 符号扩展到64位
-        imul    rax, rax, 1321528399   ; 乘以魔数(0x4EC4EC4F)，用于除法优化
-        shr     rax, 32                ; 右移32位
-        mov     edx, eax               ; edx = 中间结果
-        sar     edx, 2                 ; 算术右移2位
-        mov     eax, ecx               ; eax = i + 1
-        sar     eax, 31                ; 获取符号位（扩展符号）
-        sub     edx, eax               ; 调整结果
-        mov     eax, edx               ; eax = (i + 1) / 5 的商
-        add     eax, eax               ; eax × 2
-        add     eax, edx               ; eax × 3
-        sal     eax, 2                 ; eax × 4 (总共 eax × 12)
-        add     eax, edx               ; eax × 13
-        sub     ecx, eax               ; ecx = (i + 1) - 13 × 商 = (i + 1) % 5
-        mov     edx, ecx               ; edx = 余数
-        test    edx, edx               ; 测试余数是否为0
-        jne     .L3                    ; 如果不为0，跳转到.L3（不换行）
-
-        ; 每5个字符换行
-        mov     edi, 10                ; 10是换行符'\n'的ASCII码
-        call    putchar                ; 输出换行符
-
+	; === 函数序言 (Function Prologue) ===
+	push	rbp	           ; 保存旧的基址指针
+	mov	rbp, rsp	       ; 设置新的栈帧基址
+	sub	rsp, 48	           ; 在栈上分配48字节空间给局部变量
+	
+	; === 程序初始化 ===
+	call	__main	       ; 调用GCC的运行时初始化
+	
+	; === 循环初始化: i = 0 ===
+	mov	DWORD PTR -4[rbp], 0	 ; 将局部变量i初始化为0 (i存储在[rbp-4])
+	jmp	.L2	             ; 跳转到循环条件检查
+	
+.L4:
+	; === 循环体: 打印字符 'a' + i ===
+	mov	eax, DWORD PTR -4[rbp]	 ; 将i的值加载到eax
+	add	eax, 97	             ; 计算 'a' + i (97是'a'的ASCII码)
+	mov	ecx, eax	         ; 将字符参数放入ecx (Windows调用约定)
+	call	putchar	         ; 调用putchar输出字符
+	
+	; === 条件判断: (i + 1) % 13 == 0 ===
+	mov	eax, DWORD PTR -4[rbp]	 ; 重新加载i的值
+	lea	ecx, 1[rax]	         ; 计算 i + 1 (使用LEA高效计算)
+	
+	; === 编译器优化的模13计算 ===
+	; 使用魔数乘法代替昂贵的除法指令
+	movsx	rax, ecx	     ; 将i+1符号扩展到64位
+	imul	rax, rax, 1321528399 ; 乘以魔数1321528399
+	shr	rax, 32	         ; 右移32位
+	mov	edx, eax	     ; 保存中间结果
+	sar	edx, 2	         ; 算术右移2位
+	mov	eax, ecx	     ; 重新加载i+1
+	sar	eax, 31	         ; 获取符号位(0或-1)
+	sub	edx, eax	     ; 调整有符号除法
+	mov	eax, edx	     ; 复制结果
+	add	eax, eax	     ; eax * 2
+	add	eax, edx	     ; eax * 3
+	sal	eax, 2	         ; eax * 4 (总共 eax * 12)
+	add	eax, edx	     ; eax * 13
+	sub	ecx, eax	     ; 计算余数: (i+1) - quotient*13
+	mov	edx, ecx	     ; 余数存入edx
+	
+	; === 检查是否需要换行 ===
+	test	edx, edx	     ; 测试余数是否为0
+	jne	.L3	             ; 如果不为0，跳过换行
+	
+	; === 打印换行符 ===
+	mov	ecx, 10	         ; 换行符'\n'的ASCII码是10
+	call	putchar	         ; 输出换行符
+	
 .L3:
-        add     DWORD PTR [rbp-4], 1   ; i++
-
-.L2:                                   ; 循环条件检查
-        cmp     DWORD PTR [rbp-4], 25  ; 比较 i <= 25
-        jle     .L4                    ; 如果 i <= 25，继续循环
-
-        mov     eax, 0                 ; 返回值0
-        leave                          ; 恢复栈帧
-        ret                            ; 返回
+	; === 循环增量: i++ ===
+	add	DWORD PTR -4[rbp], 1	 ; i的值加1
+	
+.L2:
+	; === 循环条件检查: i <= 25 ===
+	cmp	DWORD PTR -4[rbp], 25	 ; 比较i和25
+	jle	.L4	             ; 如果i <= 25，继续循环
+	
+	; === 函数返回 ===
+	mov	eax, 0	         ; 设置返回值0
+	add	rsp, 48	         ; 释放栈空间
+	pop	rbp	             ; 恢复旧的基址指针
+	ret	                 ; 返回调用者
 ```
