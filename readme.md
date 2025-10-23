@@ -31,8 +31,6 @@ main:
         mov     edi, eax               ; 准备参数：要输出的字符
         call    putchar                ; 调用putchar输出字符
 
-        ; 下面这段复杂计算实际上是：(i + 1) % 5 == 0 ?
-        ; 编译器用乘法和移位优化了取模运算
         mov     eax, DWORD PTR [rbp-4] ; eax = i
         lea     ecx, [rax+1]           ; ecx = i + 1
         movsx   rax, ecx               ; 符号扩展到64位
